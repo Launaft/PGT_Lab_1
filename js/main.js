@@ -57,6 +57,8 @@ function render()
 
 var vertices = []; // Объявление массива для хранения вершин
 var faces = []; // Объявление массива для хранения индексов
+var uvs = []; // Массив для хранения текстурных координат
+
 var geometry = new THREE.BufferGeometry();// Создание структуры для хранения геометрии
 var N = 5;
 
@@ -86,10 +88,13 @@ scene.add(triangleMesh);*/
 
 for (let i = 0; i < N; i++)
 {
-    for (let j = 0; j < N; j++)
-    {
-        vertices.push(i, 0, j);
-    }
+   for (let j = 0; j < N; j++)
+   {
+      vertices.push(i, 0, j);
+      uvs.push(i/(N-1), j/(N-1)); // Добавление текстурных координат для левой верхней вершины
+
+
+   }
 }
 
 for (let i = 0; i < N - 1; i++)
@@ -109,11 +114,8 @@ for (let i = 0; i < N - 1; i++)
 geometry.setAttribute( 'position', new THREE.Float32BufferAttribute( vertices, 3 ) );
 geometry.setIndex( faces );
 
-var uvs = []; // Массив для хранения текстурных координат
-uvs.push(1, 0); // Добавление текстурных координат для левой верхней вершины
-uvs.push(1, 1); // Добавление текстурных координат для правой верхней вершины
-uvs.push(0, 1); // Добавление текстурных координат для правой нижней вершины
-uvs.push(0, 0); // Добавление текстурных координат для левой нижней вершины
+
+
 //Добавление текстурных координат в геометрию
 geometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uvs, 2 ) );
 
@@ -143,6 +145,7 @@ scene.add(regularGrid);
 var imagedata;
 var groundVertices = [];
 var groundFaces = [];
+var uvsGround = [];
 var groundGeometry = new THREE.BufferGeometry();
 var canvas = document.createElement('canvas');
 var context = canvas.getContext('2d');
@@ -184,10 +187,11 @@ function CreateTerrain()
       {
          var h = getPixel( imagedata, i, j )
          groundVertices.push(i * 0.01, h * 0.005, j * 0.01);
+         uvsGround.push(i/(M-1), j/(M-1));
       }
    }
 
-   for (let i = 0; i < M - 1; i++)
+   for (let i = 0; i < M - 1; i++) 
    {
     for (let j = 0; j < M - 1; j++)
       {
@@ -203,12 +207,6 @@ function CreateTerrain()
 
    groundGeometry.setAttribute( 'position', new THREE.Float32BufferAttribute( groundVertices, 3 ) );
    groundGeometry.setIndex( groundFaces );
-
-   var uvsGround = [];
-   uvsGround.push(0, 1);
-   uvsGround.push(1, 1);
-   uvsGround.push(1, 0);
-   uvsGround.push(0, 0);
 
    groundGeometry.setAttribute( 'uv', new THREE.Float32BufferAttribute( uvsGround, 2 ) );
    
