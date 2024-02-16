@@ -5,12 +5,16 @@ import { GLTFLoader } from "./libs/GLTFLoader.js";
 
 var container;
 var camera, scene, renderer;
+var M;
+var mixer, morphs = []; //глобальные переменные для хранения списка анимаций
+var clock = new THREE.Clock();
+var treeObj = new THREE.Object3D(), palmaObj;
+var parrotMesh, parrotMorphs = [], storkMesh, storkMorphs = [];
 
 init();
 animate();
 
 //createYachik3();
-loadTerrainImg();
 
 function init()
 {
@@ -27,14 +31,30 @@ function init()
    renderer.setClearColor( 0x00ff00ff, 1);
    container.appendChild( renderer.domElement );
 
+   loadTerrainImg();
+
+   mixer = new THREE.AnimationMixer( scene );
+
    var spotlight = new THREE.PointLight(0xffffff);
    spotlight.position.set(70, 60, 100);
    scene.add(spotlight);
 
    // вызов функции загрузки модели (в функции Init)
-   loadModel('models/trees/', "Tree.obj", "Tree.mtl");
-   loadModel('models/trees/', "Palma 001.obj", "Palma 001.mtl");
-   
+   for (var i = 0; i < 10; i++)
+   {
+      if (Math.random() < 0.5)
+      {
+         loadModel('models/trees/', "Tree.obj", "Tree.mtl");
+      }
+      else
+      {
+         loadModel('models/trees/', "Palma 001.obj", "Palma 001.mtl");
+      }
+   }
+
+   storkMorphs.push(loadAnimatedModel('models/animated/Stork.glb'));
+   parrotMorphs.push(loadAnimatedModel('models/animated/Parrot.glb'));
+
    window.addEventListener( 'resize', onWindowResize, false ); 
 }
 
@@ -48,6 +68,15 @@ function onWindowResize()
 
 function animate()
 {
+   var delta = clock.getDelta();
+   mixer.update( delta );
+
+   for(var i = 0; i < morphs.length; i++)
+   {
+      var morph0 = storkMorphs[i];
+      var morph1 = parrotMorphs[i];
+   }
+
    requestAnimationFrame( animate );
    render();
 }
@@ -139,7 +168,6 @@ function loadTerrainImg()
    var canvas = document.createElement('canvas');
    var context = canvas.getContext('2d');
    var img = new Image();
-   var M;
    
    img.onload = function()
    {
@@ -236,12 +264,33 @@ function loadModel(path, oname, mname) //где path – путь к папке 
             .setPath( path ) //путь до модели
             .load( oname, function ( object ) { //название модели
                //позиция модели по координате X
-               object.position.x = 10;
+               object.position.x = Math.random() * (M - 2) * 0.1;
+               //object.position.y = 10;
+               object.position.z = Math.random() * (M - 2) * 0.1;
                //масштаб модели
-               object.scale.set(0.2, 0.2, 0.2);
+               object.scale.set(0.05, 0.05, 0.05);
                //object.scale.set(0.02, 0.02, 0.02);
                //добавление модели в сцену
                scene.add( object );
             }, onProgress, onError );
       } );
+}
+
+function loadAnimatedModel(path) //где path – путь и название модели
+{
+   var loader = new GLTFLoader();
+
+   loader.load( path, function ( gltf ) {
+      var mesh = gltf.scene.children[ 0 ];
+      var clip = gltf.animations[ 0 ];
+      //установка параметров анимации (скорость воспроизведения и стартовый фрейм)
+      mixer.clipAction( clip, mesh ).setDuration( 1 ).startAt( 0 ).play();
+ 
+      mesh.position.set(10, 10, 20); //установка позиции объекта
+      mesh.rotation.y = Math.PI / 8; //поворот модели вокруг оси Y
+      mesh.scale.set(0.05, 0.05, 0.05); //масштаб модели
+
+   scene.add( mesh ); //добавление модели в сцену
+   //morphs.push( mesh );
+   } );
 }
