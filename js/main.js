@@ -1,10 +1,16 @@
+import * as THREE from "./libs/three.module.js";
+import { MTLLoader } from "./libs/MTLLoader.js";
+import { OBJLoader } from "./libs/OBJLoader.js";
+import { GLTFLoader } from "./libs/GLTFLoader.js";
+
 var container;
 var camera, scene, renderer;
 
 init();
 animate();
 
-createYachik3();
+//createYachik3();
+loadTerrainImg();
 
 function init()
 {
@@ -13,7 +19,7 @@ function init()
    scene = new THREE.Scene();
 
    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 4000 );
-   camera.position.set(6, 6, 6);
+   camera.position.set(75, 75, 75);
    camera.lookAt(new THREE.Vector3( 0, 0.0, 0));
 
    renderer = new THREE.WebGLRenderer( { antialias: false } );
@@ -25,6 +31,10 @@ function init()
    spotlight.position.set(70, 60, 100);
    scene.add(spotlight);
 
+   // вызов функции загрузки модели (в функции Init)
+   loadModel('models/trees/', "Tree.obj", "Tree.mtl");
+   loadModel('models/trees/', "Palma 001.obj", "Palma 001.mtl");
+   
    window.addEventListener( 'resize', onWindowResize, false ); 
 }
 
@@ -46,6 +56,7 @@ function render()
 {
    renderer.render( scene, camera );
 }
+
 /*
 function createYachik3()
 {
@@ -125,10 +136,6 @@ scene.add(triangleMesh);
 function loadTerrainImg()
 {
    var imagedata;
-   var groundVertices = [];
-   var groundFaces = [];
-   var uvsGround = [];
-   var groundGeometry = new THREE.BufferGeometry();
    var canvas = document.createElement('canvas');
    var context = canvas.getContext('2d');
    var img = new Image();
@@ -142,7 +149,7 @@ function loadTerrainImg()
       context.drawImage(img, 0, 0)
       imagedata = context.getImageData(0, 0, img.width, img.height);
    
-      CreateTerrain();
+      CreateTerrain(M, imagedata);
    }
    
    img.src = 'img/terrain/lake.jpg'
@@ -154,16 +161,19 @@ function getPixel( imagedata, x, y )
    return data[ groundPosition ];;
 }
 
-function CreateTerrain()
+function CreateTerrain(M, imagedata)
 {
-   //var M = 256
+   var groundVertices = [];
+   var groundFaces = [];
+   var uvsGround = [];
+   var groundGeometry = new THREE.BufferGeometry();
 
    for (let i = 0; i < M; i++)
    {
       for (let j = 0; j < M; j++)
       {
          var h = getPixel( imagedata, i, j )
-         groundVertices.push(i * 0.01, h * 0.001, j * 0.01);
+         groundVertices.push(i * 0.1, h * 0.01, j * 0.1);
          uvsGround.push(i/(M-1), j/(M-1));
       }
    }
@@ -172,10 +182,10 @@ function CreateTerrain()
    {
     for (let j = 0; j < M - 1; j++)
       {
-         lin_indx0 = i + j * M;
-         lin_indx1 = (i + 1) + j * M;
-         lin_indx2 = i + (j + 1) * M;
-         lin_indx3 = (i + 1) + (j + 1) * M;
+         var lin_indx0 = i + j * M;
+         var lin_indx1 = (i + 1) + j * M;
+         var lin_indx2 = i + (j + 1) * M;
+         var lin_indx3 = (i + 1) + (j + 1) * M;
          
          groundFaces.push(lin_indx0, lin_indx1, lin_indx3);
          groundFaces.push(lin_indx0, lin_indx3, lin_indx2);
@@ -191,8 +201,6 @@ function CreateTerrain()
    groundGeometry.computeVertexNormals();
 
    var groundTex = new THREE.TextureLoader().load( 'img/terrain/landtile.jpg' );
-   groundTex.wrapS = tex.wrapT = THREE.RepeatWrapping;
-   groundTex.repeat.set( M, M );
 
    var groundMat = new THREE.MeshLambertMaterial({
       map:groundTex,
@@ -204,4 +212,36 @@ function CreateTerrain()
    ground.position.set(0.0, 0.0, 0.0);
 
    scene.add(ground);
+}
+
+// lab 3
+
+function loadModel(path, oname, mname) //где path – путь к папке с моделями
+{
+   const onProgress = function ( xhr ) { //выполняющаяся в процессе загрузки
+      if ( xhr.lengthComputable ) {
+         const percentComplete = xhr.loaded / xhr.total * 100;
+         console.log( Math.round( percentComplete, 2 ) + '% downloaded' );
+      }
+   };
+   const onError = function () { }; //выполняется в случае возникновения ошибки
+
+   const manager = new THREE.LoadingManager();
+   new MTLLoader( manager )
+      .setPath( path ) //путь до модели
+      .load( mname, function ( materials ) { //название материала
+         materials.preload();
+         new OBJLoader( manager )
+            .setMaterials( materials ) //установка материала
+            .setPath( path ) //путь до модели
+            .load( oname, function ( object ) { //название модели
+               //позиция модели по координате X
+               object.position.x = 10;
+               //масштаб модели
+               object.scale.set(0.2, 0.2, 0.2);
+               //object.scale.set(0.02, 0.02, 0.02);
+               //добавление модели в сцену
+               scene.add( object );
+            }, onProgress, onError );
+      } );
 }
