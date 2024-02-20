@@ -8,8 +8,30 @@ var camera, scene, renderer;
 var M;
 var mixer, morphs = []; //глобальные переменные для хранения списка анимаций
 var clock = new THREE.Clock();
+//var clock1 = new THREE.Clock();
+var ellTime = 0;
 var treeObj = new THREE.Object3D(), palmaObj;
 var parrotMesh, parrotMorphs = [], storkMesh, storkMorphs = [];
+
+var curve1 = new THREE.CubicBezierCurve3(
+   new THREE.Vector3( 15, 15, 28 ), //P0
+   new THREE.Vector3( 15, 15, 45 ), //P1
+   new THREE.Vector3( 40, 15, 45 ), //P2
+   new THREE.Vector3( 40, 15, 28 ) //P3
+  );
+var curve2 = new THREE.CubicBezierCurve3(
+   new THREE.Vector3( 40, 15, 28 ), //P0
+   new THREE.Vector3( 40, 15, 11 ), //P1
+   new THREE.Vector3( 15, 15, 11 ), //P2
+   new THREE.Vector3( 15, 15, 28 ) //P3
+  );
+var vertices = [];
+vertices = curve1.getPoints( 20 );
+vertices = vertices.concat(curve2.getPoints( 20 ));
+
+var pos = new THREE.Vector3();
+
+var path;
 
 init();
 animate();
@@ -55,6 +77,17 @@ function init()
    storkMorphs.push(loadAnimatedModel('models/animated/Stork.glb'));
    parrotMorphs.push(loadAnimatedModel('models/animated/Parrot.glb'));
 
+   // создание кривой по списку точек
+   path = new THREE.CatmullRomCurve3(vertices);
+   // является ли кривая замкнутой (зацикленной)
+   path.closed = true;
+   //создание геометрии из точек кривой
+   var geometry = new THREE.BufferGeometry().setFromPoints( vertices );
+   var material = new THREE.LineBasicMaterial( { color : 0xffff00 } );
+   //создание объекта
+   var curveObject = new THREE.Line( geometry, material );
+   scene.add(curveObject); //добавление объекта в сцену
+
    window.addEventListener( 'resize', onWindowResize, false ); 
 }
 
@@ -66,6 +99,8 @@ function onWindowResize()
    renderer.setSize( window.innerWidth, window.innerHeight );
 }
 
+var a;
+
 function animate()
 {
    var delta = clock.getDelta();
@@ -76,6 +111,9 @@ function animate()
       var morph0 = storkMorphs[i];
       var morph1 = parrotMorphs[i];
    }
+
+  
+   a = motion(a, ellTime, morph0);
 
    requestAnimationFrame( animate );
    render();
@@ -293,4 +331,15 @@ function loadAnimatedModel(path) //где path – путь и название 
    scene.add( mesh ); //добавление модели в сцену
    //morphs.push( mesh );
    } );
+}
+
+function motion(a, ellTime, morph0)
+{
+  
+
+   morph0.position =  path.getPointAt(ellTime/20);
+
+   //object.lookAt(nextPoint);
+
+   return a;
 }
