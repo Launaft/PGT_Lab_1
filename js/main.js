@@ -228,7 +228,7 @@ function CreateTerrain(M, imagedata)
    groundGeometry.computeFaceNormals();
    groundGeometry.computeVertexNormals();
 
-   var groundTex = new THREE.TextureLoader().load( 'img/terrain/landtile.jpg' );
+   var groundTex = new THREE.TextureLoader().load( 'img/terrain/grasstile.jpg' );
 
    var groundMat = new THREE.MeshLambertMaterial({
       map:groundTex,
