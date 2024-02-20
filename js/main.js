@@ -5,33 +5,12 @@ import { GLTFLoader } from "./libs/GLTFLoader.js";
 
 var container;
 var camera, scene, renderer;
-var M;
-var mixer, morphs = []; //глобальные переменные для хранения списка анимаций
+var M, t, T;
+var mixer, models = []; //глобальные переменные для хранения списка анимаций
 var clock = new THREE.Clock();
-//var clock1 = new THREE.Clock();
-var ellTime = 0;
-var treeObj = new THREE.Object3D(), palmaObj;
-var parrotMesh, parrotMorphs = [], storkMesh, storkMorphs = [];
-
-var curve1 = new THREE.CubicBezierCurve3(
-   new THREE.Vector3( 15, 15, 28 ), //P0
-   new THREE.Vector3( 15, 15, 45 ), //P1
-   new THREE.Vector3( 40, 15, 45 ), //P2
-   new THREE.Vector3( 40, 15, 28 ) //P3
-  );
-var curve2 = new THREE.CubicBezierCurve3(
-   new THREE.Vector3( 40, 15, 28 ), //P0
-   new THREE.Vector3( 40, 15, 11 ), //P1
-   new THREE.Vector3( 15, 15, 11 ), //P2
-   new THREE.Vector3( 15, 15, 28 ) //P3
-  );
-var vertices = [];
-vertices = curve1.getPoints( 20 );
-vertices = vertices.concat(curve2.getPoints( 20 ));
-
-var pos = new THREE.Vector3();
-
-var path;
+var focusOn = 0;
+var treeObj = new THREE.Mesh(), palmaObj;
+var parrotMesh, parrotMorphs = [], storkPath, storkMorphs = [];
 
 init();
 animate();
@@ -45,21 +24,40 @@ function init()
    scene = new THREE.Scene();
 
    camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 1, 4000 );
-   camera.position.set(75, 75, 75);
-   camera.lookAt(new THREE.Vector3( 0, 0.0, 0));
+   camera.position.set(70, 70, 70);
+   camera.lookAt(new THREE.Vector3( 0, 0, 0));
 
    renderer = new THREE.WebGLRenderer( { antialias: false } );
    renderer.setSize( window.innerWidth, window.innerHeight );
    renderer.setClearColor( 0x00ff00ff, 1);
+   renderer.shadowMap.enabled = true;
+   renderer.shadowMap.type = THREE.PCFSoftShadowMap;
    container.appendChild( renderer.domElement );
 
    loadTerrainImg();
+   scene.add(createSkySphere());
 
    mixer = new THREE.AnimationMixer( scene );
 
-   var spotlight = new THREE.PointLight(0xffffff);
+   //создание точечного источника освещения, параметры: цвет, интенсивность, дальность
+   const light = new THREE.DirectionalLight( 0xffffff, 1, 1000 );
+   light.position.set( 300, 200, 128 ); //позиция источника освещения
+   light.castShadow = true; //включение расчёта теней от источника освещения
+   light.target.position.set(0, 0, 0);
+   scene.add(light.target);
+   //настройка расчёта теней от источника освещения
+   light.shadow.mapSize.width = 512; //ширина карты теней в пикселях
+   light.shadow.mapSize.height = 512; //высота карты теней в пикселях
+   light.shadow.camera.near = 0.5; //расстояние, ближе которого не будет теней
+   light.shadow.camera.far = 1500; //расстояние, дальше которого не будет теней
+
+   scene.add( light ); //добавление источника освещения в сцену
+
+   loadModel('models/trees/', "Tree.obj", "Tree.mtl");
+   
+   /*var spotlight = new THREE.PointLight(0xffffff);
    spotlight.position.set(70, 60, 100);
-   scene.add(spotlight);
+   scene.add(spotlight);*/
 
    // вызов функции загрузки модели (в функции Init)
    for (var i = 0; i < 10; i++)
@@ -74,19 +72,12 @@ function init()
       }
    }
 
-   storkMorphs.push(loadAnimatedModel('models/animated/Stork.glb'));
-   parrotMorphs.push(loadAnimatedModel('models/animated/Parrot.glb'));
+   scene.add(treeObj);
 
-   // создание кривой по списку точек
-   path = new THREE.CatmullRomCurve3(vertices);
-   // является ли кривая замкнутой (зацикленной)
-   path.closed = true;
-   //создание геометрии из точек кривой
-   var geometry = new THREE.BufferGeometry().setFromPoints( vertices );
-   var material = new THREE.LineBasicMaterial( { color : 0xffff00 } );
-   //создание объекта
-   var curveObject = new THREE.Line( geometry, material );
-   scene.add(curveObject); //добавление объекта в сцену
+   storkMorphs.push(loadAnimatedModel('models/animated/Stork.glb'));
+   //parrotMorphs.push(loadAnimatedModel('models/animated/Parrot.glb'));
+
+   storkPath = createTrajectory();
 
    window.addEventListener( 'resize', onWindowResize, false ); 
 }
@@ -99,21 +90,27 @@ function onWindowResize()
    renderer.setSize( window.innerWidth, window.innerHeight );
 }
 
-var a;
-
 function animate()
 {
    var delta = clock.getDelta();
    mixer.update( delta );
+   t += delta;
+   T = 30;
 
-   for(var i = 0; i < morphs.length; i++)
+   /*for (var i = 0; i < storkMorphs.length; i++)
    {
-      var morph0 = storkMorphs[i];
-      var morph1 = parrotMorphs[i];
-   }
+      var morph = storkMorphs[i];
+      var pos = new THREE.Vector3();
 
-  
-   a = motion(a, ellTime, morph0);
+      if (t >= T)
+         t = 0.0;
+         
+      pos.copy(storkPath.getPointAt(t/T));
+      morph.position.copy(pos);
+   }*/
+   focusOn = 1;
+
+   Focus();
 
    requestAnimationFrame( animate );
    render();
@@ -301,17 +298,27 @@ function loadModel(path, oname, mname) //где path – путь к папке 
             .setMaterials( materials ) //установка материала
             .setPath( path ) //путь до модели
             .load( oname, function ( object ) { //название модели
-               //позиция модели по координате X
+               
+               //object.position.x = 10;
+               //object.position.z = 20;
+
                object.position.x = Math.random() * (M - 2) * 0.1;
-               //object.position.y = 10;
                object.position.z = Math.random() * (M - 2) * 0.1;
-               //масштаб модели
                object.scale.set(0.05, 0.05, 0.05);
-               //object.scale.set(0.02, 0.02, 0.02);
-               //добавление модели в сцену
+
+               object.traverse( function ( child )
+               {
+                  if ( child instanceof THREE.Mesh )
+                  {
+                     child.castShadow = true;
+                     //treeObj.push(child);
+                  }
+               } );
+               
+               //treeObj.push(object);
                scene.add( object );
             }, onProgress, onError );
-      } );
+      } );   
 }
 
 function loadAnimatedModel(path) //где path – путь и название модели
@@ -328,18 +335,86 @@ function loadAnimatedModel(path) //где path – путь и название 
       mesh.rotation.y = Math.PI / 8; //поворот модели вокруг оси Y
       mesh.scale.set(0.05, 0.05, 0.05); //масштаб модели
 
-   scene.add( mesh ); //добавление модели в сцену
-   //morphs.push( mesh );
+      mesh.castShadow = true;
+      mesh.receiveShadow = true;
+
+      scene.add( mesh ); //добавление модели в сцену
+      storkMorphs.push( mesh );
    } );
 }
 
-function motion(a, ellTime, morph0)
+function createTrajectory()
 {
-  
+   var curve1 = new THREE.CubicBezierCurve3(
+      new THREE.Vector3( 15, 15, 28 ), //P0
+      new THREE.Vector3( 15, 15, 45 ), //P1
+      new THREE.Vector3( 40, 15, 45 ), //P2
+      new THREE.Vector3( 40, 15, 28 ) //P3
+     );
+   var curve2 = new THREE.CubicBezierCurve3(
+      new THREE.Vector3( 40, 15, 28 ), //P0
+      new THREE.Vector3( 40, 15, 11 ), //P1
+      new THREE.Vector3( 15, 15, 11 ), //P2
+      new THREE.Vector3( 15, 15, 28 ) //P3
+     );
 
-   morph0.position =  path.getPointAt(ellTime/20);
+   var vertices = [];
+   vertices = curve1.getPoints( 20 );
+   vertices = vertices.concat(curve2.getPoints( 20 ));
+   
+   // создание кривой по списку точек
+   var path = new THREE.CatmullRomCurve3(vertices);
+   // является ли кривая замкнутой (зацикленной)
+   path.closed = true;
 
-   //object.lookAt(nextPoint);
+   //создание геометрии из точек кривой
+   var geometry = new THREE.BufferGeometry().setFromPoints( vertices );
+   var material = new THREE.LineBasicMaterial( { color : 0xffff00 } );
+   //создание объекта
+   var curveObject = new THREE.Line( geometry, material );
+   scene.add(curveObject); //добавление объекта в сцену
+   
+   return path;
+}
 
-   return a;
+function createSkySphere()
+{   
+   var geometry = new THREE.SphereGeometry( 1000, 32, 32 );
+
+   var tex = new THREE.TextureLoader().load( "img/sky/sky_1.jpg" );
+   tex.minFilter = THREE.NearestFilter;
+   tex.anisotropy = renderer.capabilities.getMaxAnisotropy();
+
+   var material = new THREE.MeshBasicMaterial({
+      map: tex,
+      side: THREE.DoubleSide
+      });
+
+   var sphere = new THREE.Mesh( geometry, material );
+   sphere.rotation.x = 180;
+
+   return sphere;
+}
+
+function Focus()
+{
+   if (focusOn == 0)
+   {
+      camera.position.set(70, 70, 70);
+      camera.lookAt(0, 0, 0);
+   }
+   else if (focusOn == 1)
+   {
+      var cameraOffset = new THREE.Vector3(0, 3, -15);
+      var rotMat = new THREE.Matrix4();
+      var posMat = new THREE.Matrix4();
+      var Mat = new THREE.Matrix4();
+
+      rotMat.extractRotation(storkMorphs.matrixWorld);
+      posMat.extractPosition(storkMorphs.matrixWorld);
+      Mat.multiplyMatrices(posMat, rotMat);
+
+      camera.position.copy(cameraOffset.applyMatrix4(Mat));
+      camera.lookAt(storkMorphs.position);
+   }
 }
