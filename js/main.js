@@ -5,12 +5,14 @@ import { GLTFLoader } from "./libs/GLTFLoader.js";
 
 var container;
 var camera, scene, renderer;
-var M, t, T;
-var mixer, models = []; //глобальные переменные для хранения списка анимаций
+var keyboard = new THREEx.KeyboardState();
+var imagedata;
+var M, t = 0, T = 0;
+var mixer, morphs = []; //глобальные переменные для хранения списка анимаций
 var clock = new THREE.Clock();
 var focusOn = 0;
-var treeObj = new THREE.Mesh(), palmaObj;
-var parrotMesh, parrotMorphs = [], storkPath, storkMorphs = [];
+var storkPath, parrotPath;
+var ang = 0.0;
 
 init();
 animate();
@@ -41,43 +43,28 @@ function init()
 
    //создание точечного источника освещения, параметры: цвет, интенсивность, дальность
    const light = new THREE.DirectionalLight( 0xffffff, 1, 1000 );
-   light.position.set( 300, 200, 128 ); //позиция источника освещения
+   light.position.set( 300, 200, 180 ); //позиция источника освещения
    light.castShadow = true; //включение расчёта теней от источника освещения
+   light.target = new THREE.Object3D();
    light.target.position.set(0, 0, 0);
    scene.add(light.target);
    //настройка расчёта теней от источника освещения
-   light.shadow.mapSize.width = 512; //ширина карты теней в пикселях
-   light.shadow.mapSize.height = 512; //высота карты теней в пикселях
+   light.shadow.mapSize.width = 2048; //ширина карты теней в пикселях
+   light.shadow.mapSize.height = 2048; //высота карты теней в пикселях
    light.shadow.camera.near = 0.5; //расстояние, ближе которого не будет теней
-   light.shadow.camera.far = 1500; //расстояние, дальше которого не будет теней
+   light.shadow.camera.far = 2500; //расстояние, дальше которого не будет теней
 
    scene.add( light ); //добавление источника освещения в сцену
 
    loadModel('models/trees/', "Tree.obj", "Tree.mtl");
-   
-   /*var spotlight = new THREE.PointLight(0xffffff);
-   spotlight.position.set(70, 60, 100);
-   scene.add(spotlight);*/
-
-   // вызов функции загрузки модели (в функции Init)
-   for (var i = 0; i < 10; i++)
-   {
-      if (Math.random() < 0.5)
-      {
-         loadModel('models/trees/', "Tree.obj", "Tree.mtl");
-      }
-      else
-      {
-         loadModel('models/trees/', "Palma 001.obj", "Palma 001.mtl");
-      }
-   }
-
-   scene.add(treeObj);
-
-   storkMorphs.push(loadAnimatedModel('models/animated/Stork.glb'));
+   loadAnimatedModel('models/animated/Stork.glb');
+   loadAnimatedModel('models/animated/Parrot.glb');
+   loadAnimatedModel('models/animated/Flamingo.glb');
+   //morphs.push(loadAnimatedModel('models/animated/Stork.glb'));
    //parrotMorphs.push(loadAnimatedModel('models/animated/Parrot.glb'));
 
    storkPath = createTrajectory();
+   parrotPath = createTrajectory();
 
    window.addEventListener( 'resize', onWindowResize, false ); 
 }
@@ -94,23 +81,42 @@ function animate()
 {
    var delta = clock.getDelta();
    mixer.update( delta );
-   t += delta;
+   t += delta * 2;
    T = 30;
 
-   /*for (var i = 0; i < storkMorphs.length; i++)
-   {
-      var morph = storkMorphs[i];
+   for (var i = 0; i < morphs.length - 1; i++)
+   {  
+      var morph = morphs[i];
       var pos = new THREE.Vector3();
 
       if (t >= T)
          t = 0.0;
-         
-      pos.copy(storkPath.getPointAt(t/T));
-      morph.position.copy(pos);
-   }*/
-   focusOn = 1;
+      
+         if (i == 0)
+            pos.copy(storkPath.getPointAt(t/T));
+         else 
+            pos.copy(parrotPath.getPointAt(t/T));
 
-   Focus();
+      morph.position.copy(pos);
+
+      if (t + 0.01 >= T)
+         t = 0.0;
+
+      var nextPoint = new THREE.Vector3();
+
+      if (i == 0)
+         nextPoint.copy(storkPath.getPointAt((t + 0.01)/T));
+      else
+         nextPoint.copy(parrotPath.getPointAt((t + 0.01)/T));
+
+      morph.lookAt(nextPoint);
+   }
+
+   if (morphs.length == 3)
+   {
+      Focus();
+      keyboardControll();
+   }
 
    requestAnimationFrame( animate );
    render();
@@ -199,7 +205,6 @@ scene.add(triangleMesh);
 
 function loadTerrainImg()
 {
-   var imagedata;
    var canvas = document.createElement('canvas');
    var context = canvas.getContext('2d');
    var img = new Image();
@@ -250,7 +255,7 @@ function CreateTerrain(M, imagedata)
          var lin_indx2 = i + (j + 1) * M;
          var lin_indx3 = (i + 1) + (j + 1) * M;
          
-         groundFaces.push(lin_indx0, lin_indx1, lin_indx3);
+         groundFaces.push(lin_indx0,    lin_indx1, lin_indx3);
          groundFaces.push(lin_indx0, lin_indx3, lin_indx2);
       }
    }
@@ -268,11 +273,13 @@ function CreateTerrain(M, imagedata)
    var groundMat = new THREE.MeshLambertMaterial({
       map:groundTex,
       wireframe: false,
-      side:THREE.DoubleSide
+      side:THREE.DoubleSide    
    });
 
    var ground = new THREE.Mesh(groundGeometry, groundMat);
    ground.position.set(0.0, 0.0, 0.0);
+
+   ground.receiveShadow = true;
 
    scene.add(ground);
 }
@@ -299,25 +306,31 @@ function loadModel(path, oname, mname) //где path – путь к папке 
             .setPath( path ) //путь до модели
             .load( oname, function ( object ) { //название модели
                
-               //object.position.x = 10;
-               //object.position.z = 20;
-
-               object.position.x = Math.random() * (M - 2) * 0.1;
-               object.position.z = Math.random() * (M - 2) * 0.1;
-               object.scale.set(0.05, 0.05, 0.05);
+               object.scale.set(0.05, 0.06, 0.05);
+               object.receiveShadow = true;
+               object.castShadow = true;
 
                object.traverse( function ( child )
                {
                   if ( child instanceof THREE.Mesh )
                   {
                      child.castShadow = true;
-                     //treeObj.push(child);
                   }
                } );
                
-               //treeObj.push(object);
-               scene.add( object );
-            }, onProgress, onError );
+               for (var i = 0; i < 10; i++)
+               {
+                  object.position.x = Math.random() * (M - 2) * 0.1;
+                  object.position.z = Math.random() * (M - 2) * 0.1;
+                  object.position.y = getPixel(imagedata, Math.round(object.position.x), Math.round(object.position.z)) * 0.01 - 0.1;
+
+                  var clone = object.clone();
+
+                  scene.add( clone );
+                  //trees.push(clone);
+               }
+
+            }, onProgress, onError     );
       } );   
 }
 
@@ -339,23 +352,24 @@ function loadAnimatedModel(path) //где path – путь и название 
       mesh.receiveShadow = true;
 
       scene.add( mesh ); //добавление модели в сцену
-      storkMorphs.push( mesh );
+      morphs.push( mesh );
    } );
 }
 
 function createTrajectory()
 {
+   var rand = Math.random() * (2 - 0.5) + 0.5;
    var curve1 = new THREE.CubicBezierCurve3(
-      new THREE.Vector3( 15, 15, 28 ), //P0
-      new THREE.Vector3( 15, 15, 45 ), //P1
-      new THREE.Vector3( 40, 15, 45 ), //P2
-      new THREE.Vector3( 40, 15, 28 ) //P3
+      new THREE.Vector3( 15 * rand, 15, 28 ), //P0
+      new THREE.Vector3( 15 * rand, 15, 45 ), //P1
+      new THREE.Vector3( 40 * rand, 15, 45 ), //P2
+      new THREE.Vector3( 40 * rand, 15, 28 ) //P3
      );
    var curve2 = new THREE.CubicBezierCurve3(
-      new THREE.Vector3( 40, 15, 28 ), //P0
-      new THREE.Vector3( 40, 15, 11 ), //P1
-      new THREE.Vector3( 15, 15, 11 ), //P2
-      new THREE.Vector3( 15, 15, 28 ) //P3
+      new THREE.Vector3( 40 * rand, 15, 28 ), //P0
+      new THREE.Vector3( 40 * rand, 15, 11 ), //P1
+      new THREE.Vector3( 15 * rand, 15, 11 ), //P2
+      new THREE.Vector3( 15 * rand, 15, 28 ) //P3
      );
 
    var vertices = [];
@@ -398,23 +412,125 @@ function createSkySphere()
 
 function Focus()
 {
+   
    if (focusOn == 0)
    {
       camera.position.set(70, 70, 70);
       camera.lookAt(0, 0, 0);
    }
+   else if (focusOn == 3)
+   {
+      var morph = morphs[focusOn - 1];
+      var cameraOffset = new THREE.Vector3(0, 3, -35);
+      var rotMat = new THREE.Matrix4();
+      var posMat = new THREE.Matrix4();
+      var Mat = new THREE.Matrix4();
+
+      rotMat.extractRotation(morph.matrixWorld);
+      posMat.copyPosition(morph.matrixWorld);
+      Mat.multiplyMatrices(posMat, rotMat);
+
+      camera.position.copy(cameraOffset.applyMatrix4(Mat));
+      camera.lookAt(morph.position);
+   }
    else if (focusOn == 1)
    {
+      var morph = morphs[focusOn - 1];
       var cameraOffset = new THREE.Vector3(0, 3, -15);
       var rotMat = new THREE.Matrix4();
       var posMat = new THREE.Matrix4();
       var Mat = new THREE.Matrix4();
 
-      rotMat.extractRotation(storkMorphs.matrixWorld);
-      posMat.extractPosition(storkMorphs.matrixWorld);
+      rotMat.extractRotation(morph.matrixWorld);
+      posMat.copyPosition(morph.matrixWorld);
       Mat.multiplyMatrices(posMat, rotMat);
 
       camera.position.copy(cameraOffset.applyMatrix4(Mat));
-      camera.lookAt(storkMorphs.position);
+      camera.lookAt(morph.position);
+   }
+   else if (focusOn == 2)
+   {
+      var morph = morphs[focusOn - 1];
+      var cameraOffset = new THREE.Vector3(0, 3, -15);
+      var rotMat = new THREE.Matrix4();
+      var posMat = new THREE.Matrix4();
+      var Mat = new THREE.Matrix4();
+
+      rotMat.extractRotation(morph.matrixWorld);
+      posMat.copyPosition(morph.matrixWorld);
+      Mat.multiplyMatrices(posMat, rotMat);
+
+      camera.position.copy(cameraOffset.applyMatrix4(Mat));
+      camera.lookAt(morph.position);
+   }
+}
+
+function keyboardControll()
+{
+   if (keyboard.pressed("0"))
+      focusOn = 0;
+   else if (keyboard.pressed("1"))
+      focusOn = 1;
+   else if (keyboard.pressed("2"))
+      focusOn = 2;
+   else if (keyboard.pressed("3"))
+      focusOn = 3;
+
+   if (focusOn == 3)
+   {
+      var morph = morphs[focusOn - 1];
+      var rotAxis = new THREE.Vector3(0, 1, 0);
+      var tiltAxis = new THREE.Vector3(0, 0, 1);
+      var xAxis = new THREE.Vector3(0, 0, 1);
+
+      
+
+      if (keyboard.pressed("up"))
+      {
+         morph.translateZ(0.1);
+      }
+      else if (keyboard.pressed("down"))
+      {
+         morph.translateZ(-0.1);
+      }
+      if (keyboard.pressed("left"))
+      {
+         if (ang > - Math.PI/4)
+         {
+            ang -= 0.01;
+            morph.rotateOnAxis(tiltAxis, -0.01);
+         }
+            
+         morph.rotateOnAxis(tiltAxis, -ang);
+         morph.rotateOnAxis(rotAxis, 0.01);
+         morph.rotateOnAxis(tiltAxis, ang);
+         
+      } 
+      else if (keyboard.pressed("right"))
+      {
+         if (ang < Math.PI/4)
+         {
+            ang += 0.01;
+            morph.rotateOnAxis(tiltAxis, 0.01);
+         }
+            
+         morph.rotateOnAxis(tiltAxis, -ang);
+         morph.rotateOnAxis(rotAxis, -0.01);
+         morph.rotateOnAxis(tiltAxis, ang);
+         
+      } 
+      else
+      {
+         if (ang > 0)
+         {
+            ang -= 0.01;
+            morph.rotateOnAxis(tiltAxis, -0.01);
+         }
+         else
+         {
+            ang += 0.01;
+            morph.rotateOnAxis(tiltAxis, 0.01);
+         }
+      }
    }
 }
