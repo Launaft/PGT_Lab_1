@@ -42,8 +42,8 @@ function init()
    mixer = new THREE.AnimationMixer( scene );
 
    //создание точечного источника освещения, параметры: цвет, интенсивность, дальность
-   const light = new THREE.DirectionalLight( 0xffffff, 1, 1000 );
-   light.position.set( 300, 200, 180 ); //позиция источника освещения
+   const light = new THREE.SpotLight( 0xffffff);
+   light.position.set( -50, 500, -50 ); //позиция источника освещения
    light.castShadow = true; //включение расчёта теней от источника освещения
    light.target = new THREE.Object3D();
    light.target.position.set(0, 0, 0);
@@ -307,7 +307,7 @@ function loadModel(path, oname, mname) //где path – путь к папке 
             .load( oname, function ( object ) { //название модели
                
                object.scale.set(0.05, 0.06, 0.05);
-               object.receiveShadow = true;
+               //object.receiveShadow = true;
                object.castShadow = true;
 
                object.traverse( function ( child )
@@ -349,7 +349,7 @@ function loadAnimatedModel(path) //где path – путь и название 
       mesh.scale.set(0.05, 0.05, 0.05); //масштаб модели
 
       mesh.castShadow = true;
-      mesh.receiveShadow = true;
+      //mesh.receiveShadow = true;
 
       scene.add( mesh ); //добавление модели в сцену
       morphs.push( mesh );
@@ -360,16 +360,16 @@ function createTrajectory()
 {
    var rand = Math.random() * (2 - 0.5) + 0.5;
    var curve1 = new THREE.CubicBezierCurve3(
-      new THREE.Vector3( 15 * rand, 15, 28 ), //P0
-      new THREE.Vector3( 15 * rand, 15, 45 ), //P1
-      new THREE.Vector3( 40 * rand, 15, 45 ), //P2
-      new THREE.Vector3( 40 * rand, 15, 28 ) //P3
+      new THREE.Vector3( 10 * rand, 15, 25 ), //P0
+      new THREE.Vector3( 10 * rand, 15, 40), //P1
+      new THREE.Vector3( 23 * rand, 15, 40 ), //P2
+      new THREE.Vector3( 23 * rand, 15, 25 ) //P3
      );
    var curve2 = new THREE.CubicBezierCurve3(
-      new THREE.Vector3( 40 * rand, 15, 28 ), //P0
-      new THREE.Vector3( 40 * rand, 15, 11 ), //P1
-      new THREE.Vector3( 15 * rand, 15, 11 ), //P2
-      new THREE.Vector3( 15 * rand, 15, 28 ) //P3
+      new THREE.Vector3( 23 * rand, 15, 24 ), //P0
+      new THREE.Vector3( 23 * rand, 15, 11 ), //P1
+      new THREE.Vector3( 10 * rand, 15, 11 ), //P2
+      new THREE.Vector3( 10 * rand, 15, 24 ) //P3
      );
 
    var vertices = [];
@@ -481,7 +481,7 @@ function keyboardControll()
       var morph = morphs[focusOn - 1];
       var rotAxis = new THREE.Vector3(0, 1, 0);
       var tiltAxis = new THREE.Vector3(0, 0, 1);
-      var xAxis = new THREE.Vector3(0, 0, 1);
+      //var xAxis = new THREE.Vector3(0, 0, 1);
 
       
 
